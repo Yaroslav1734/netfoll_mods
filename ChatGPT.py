@@ -172,17 +172,13 @@ class ChatGPTMod(loader.Module):
 
         await utils.answer(
             message,
-            (
-                self.strings["result"].format(
-                    utils.escape_html(args),
-                    utils.escape_html(answer),
-                )
-                if not self.config["debug_info"]
-                else self.strings["debug_result"].format(
-                    utils.escape_html(args),
-                    utils.escape_html(answer),
-                    tokens,
-                ),
+            self.strings["result"].format(
+                utils.escape_html(args),
+                utils.escape_html(answer),
+            )
+            if not self.config["debug_info"]
+            else self.strings["debug_result"].format(
+                utils.escape_html(args), utils.escape_html(answer), tokens
             ),
         )
         openai.api_key = None
