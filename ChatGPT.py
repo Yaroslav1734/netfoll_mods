@@ -48,6 +48,15 @@ class ChatGPTMod(loader.Module):
             "\n\n<b>✔️ Corrected text: </b><code>{}</code>"
             "\n\n<b>ℹ️ Used tokens: </b><code>{}</code>"
         ),
+        "edit_code_result": (
+            "<b>❌ Original code: </b><code>{}</code>"
+            "\n\n<b>✔️ Corrected code: </b><code>{}</code>"
+        ),
+        "edit_code_debug_result": (
+            "<b>❌ Original code: </b><code>{}</code>"
+            "\n\n<b>✔️ Corrected code: </b><code>{}</code>"
+            "\n\n<b>ℹ️ Used tokens: </b><code>{}</code>"
+        ),
         "_cfg_doc_debug_info": "Whether information about used tokens will be shown",
         "_cfg_doc_openai_token": "OpenAI API token",
     }
@@ -77,11 +86,21 @@ class ChatGPTMod(loader.Module):
             "\n\n<b>✔️ Исправленный текст: </b><code>{}</code>"
             "\n\n<b>ℹ️ Использовано токенов: </b><code>{}</code>"
         ),
+        "edit_code_result": (
+            "<b>❌ Оригинальный код: </b><code>{}</code>"
+            "\n\n<b>✔️ Исправленный код: </b><code>{}</code>"
+        ),
+        "edit_code_debug_result": (
+            "<b>❌ Оригинальный код: </b><code>{}</code>"
+            "\n\n<b>✔️ Исправленный код: </b><code>{}</code>"
+            "\n\n<b>ℹ️ Использовано токенов: </b><code>{}</code>"
+        ),
         "_cfg_doc_debug_info": "Будет ли показываться информация об использованных токенах",
         "_cfg_doc_openai_token": "Токен OpenAI API",
         "_cls_doc": "Модуль для общения с ChatGPT. Основан на OpenAI API.",
         "_cmd_doc_chatgpt": "Спросить ChatGPT о чём-нибудь. В аргументах укажи свой вопрос.",
         "_cmd_doc_edits": "Исправь орфографические ошибки в своём тексте.",
+        "_cmd_doc_editscode": "Исправь ошибки в своём коде",
     }
 
     def __init__(self):
@@ -248,3 +267,67 @@ class ChatGPTMod(loader.Module):
         )
 
         openai.api_key = None
+
+    async def editscodecmd(self, message: Message):
+        """Correct errors in your code."""
+
+        args = utils.get_args_raw(message)
+        if not args:
+            await utils.answer(message, self.strings["where_args?"])
+            return
+
+        await utils.answer(message, self.strings["processing"])
+
+        openai.api_key = self.config["openai_token"]
+
+        try:
+            json_result = await openai.Edit.acreate(
+                model="code-davinci-edit-001",
+                input=args,
+                instruction="Fix errors in this code.",
+            )
+
+            result = json_result["choices"][0]["text"]
+            tokens = json_result["usage"]["total_tokens"]
+        except Exception as e:
+            if isinstance(e, openai.error.AuthenticationError):
+                if str(e).startswith("No API key provided"):
+                    await utils.answer(message, self.strings["set_token"])
+                    return
+
+                elif str(e).startswith("Incorrect API key provided"):
+                    await utils.answer(message, self.strings["incorrect_token"])
+                    return
+
+                else:
+                    await utils.answer(
+                        message,
+                        self.strings["unknown_openai_error"].format(
+                            e.__class__.__name__,
+                            utils.escape_html(str(e)),
+                        ),
+                    )
+                    return
+            else:
+                await utils.answer(
+                    message,
+                    self.strings["unknown_error"].format(
+                        e.__class__.__name__,
+                        utils.escape_html(str(e)),
+                    ),
+                )
+                return
+
+        await utils.answer(
+            message,
+            self.strings["edit_code_result"].format(
+                utils.escape_html(args),
+                utils.escape_html(result),
+            )
+            if not self.config["debug_info"]
+            else self.strings["edit_code_debug_result"].format(
+                utils.escape_html(args),
+                utils.escape_html(result),
+                tokens,
+            ),
+        )
